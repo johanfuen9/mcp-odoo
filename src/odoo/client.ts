@@ -6,7 +6,8 @@
 // transacción independiente en Odoo.
 
 import { Agent, fetch as undiciFetch } from "undici";
-import { lookupSeguro, UrlNoPermitidaError } from "../security/ssrf.js";
+import net from "node:net";
+import { esIpBloqueada, lookupSeguro, UrlNoPermitidaError } from "../security/ssrf.js";
 import { errorDesdeRespuesta, OdooError, type CuerpoErrorOdoo } from "./errors.js";
 
 /**
@@ -32,7 +33,7 @@ export interface CredencialesOdoo {
   /** Solo para la URL del .env en desarrollo. */
   permitirPrivadas?: boolean;
   /** De dónde salieron las credenciales (para logs, nunca la clave). */
-  origen: "encabezados" | "ruta" | "entorno";
+  origen: "oauth" | "entorno";
 }
 
 export type FetchLike = (url: string, init: RequestInit & { dispatcher?: unknown }) => Promise<Response>;
@@ -81,6 +82,7 @@ export class OdooClient {
       throw new OdooError("parametros", `El nombre de modelo "${modelo}" no es válido.`);
     }
 
+    this.verificarDestino();
     const destino = new URL(`/json/2/${modelo}/${metodo}`, this.credenciales.url);
     const headers: Record<string, string> = {
       Authorization: `bearer ${this.credenciales.apiKey}`,
@@ -128,6 +130,17 @@ export class OdooClient {
     }
 
     if (!resp.ok) {
+      if (resp.status === 404 && !esJson) {
+        // Sin JSON-2: puede ser un Odoo anterior a la 19.
+        const version = await this.versionServidor();
+        if (version !== null && version < 19) {
+          throw new OdooError(
+            "version_no_soportada",
+            `Este Odoo es la versión ${version}. El conector usa la API JSON-2, que existe desde Odoo 19.`,
+            `version ${version}`,
+          );
+        }
+      }
       throw errorDesdeRespuesta(resp.status, esJson ? (cuerpo as CuerpoErrorOdoo) : null, modelo, metodo);
     }
     if (!esJson) {
@@ -181,6 +194,38 @@ export class OdooClient {
       "formatted_read_group",
       limpiar({ domain, groupby, aggregates: aggs, ...opciones }),
     );
+  }
+
+  /**
+   * Con una IP literal, el socket no pasa por `lookup`, así que lookupSeguro no
+   * la ve: hay que validarla aquí, antes de conectar.
+   */
+  private verificarDestino(): void {
+    if (this.credenciales.permitirPrivadas) return;
+    const host = this.credenciales.url.hostname.replace(/^\[|\]$/g, "");
+    if (net.isIP(host) && esIpBloqueada(host)) {
+      throw new OdooError("url_no_permitida", "La URL de Odoo apunta a una IP privada o reservada y no está permitida.", "ssrf ip literal");
+    }
+  }
+
+  /** Versión mayor del servidor según /web/version (público), o null si no se pudo leer. */
+  async versionServidor(): Promise<number | null> {
+    try {
+      this.verificarDestino();
+      const resp = await this.fetchImpl(new URL("/web/version", this.credenciales.url).toString(), {
+        method: "GET",
+        headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+        redirect: "manual",
+        signal: AbortSignal.timeout(Math.min(this.timeoutMs, 5_000)),
+        dispatcher: this.credenciales.permitirPrivadas ? agentePermisivo : agenteSeguro,
+      });
+      if (!resp.ok) return null;
+      const datos = JSON.parse(await leerConLimite(resp, 64 * 1024)) as { version_info?: unknown[]; version?: string };
+      const mayor = Array.isArray(datos.version_info) ? Number(datos.version_info[0]) : Number.parseInt(datos.version ?? "", 10);
+      return Number.isFinite(mayor) ? mayor : null;
+    } catch {
+      return null;
+    }
   }
 
   private errorDeTransporte(err: unknown): OdooError {

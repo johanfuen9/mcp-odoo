@@ -150,7 +150,7 @@ export function normalizarUrlOdoo(cruda: string, opciones: OpcionesUrl = {}): UR
   return new URL(url.origin);
 }
 
-type Resolutor = (host: string) => Promise<{ address: string; family: number }[]>;
+export type Resolutor = (host: string) => Promise<{ address: string; family: number }[]>;
 
 const resolutorSistema: Resolutor = (host) => dns.promises.lookup(host, { all: true, verbatim: true });
 

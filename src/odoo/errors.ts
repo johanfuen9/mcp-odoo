@@ -9,6 +9,7 @@ export type TipoErrorOdoo =
   | "conexion"
   | "url_no_permitida"
   | "no_es_odoo"
+  | "version_no_soportada"
   | "parametros"
   | "metodo_no_permitido"
   | "modelo_no_permitido"

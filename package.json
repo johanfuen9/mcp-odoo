@@ -14,7 +14,8 @@
     "start:local": "node --env-file-if-exists=.env dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "inspector": "npx @modelcontextprotocol/inspector"
+    "inspector": "npx @modelcontextprotocol/inspector",
+    "mock:odoo": "tsx test/servidorMock.ts"
   },
   "license": "MIT",
   "dependencies": {
