@@ -17,6 +17,8 @@ export interface OpcionesMock {
   sinPermiso?: string[];
   /** Retraso artificial en ms. */
   retrasoMs?: number;
+  /** Campos que devuelven 403 al leerlos (p. ej. stock.quant.value sin ser administrador). */
+  camposRestringidos?: Record<string, string[]>;
 }
 
 export interface LlamadaRegistrada {
@@ -44,6 +46,7 @@ const RELACIONES: Record<string, string> = {
   "account.move.line.move_id": "account.move",
   "stock.quant.product_id": "product.product",
   "stock.quant.location_id": "stock.location",
+  "account.move.line.tax_line_id": "account.tax",
 };
 
 function cumpleHoja(datos: Datos, modelo: string, reg: Registro, hoja: unknown[]): boolean {
@@ -223,6 +226,13 @@ export function crearMockOdoo(opciones: OpcionesMock) {
     if (!tabla) return errorOdoo(404, "werkzeug.exceptions.NotFound", `the model '${modelo}' does not exist`);
     if (opciones.sinPermiso?.includes(modelo)) {
       return errorOdoo(403, "odoo.exceptions.AccessError", `You are not allowed to access '${modelo}' records.`);
+    }
+
+    const restringidos = opciones.camposRestringidos?.[modelo] ?? [];
+    const pedidos = (cuerpo.fields as string[] | undefined) ?? [];
+    const prohibido = pedidos.find((c) => restringidos.includes(c));
+    if (prohibido) {
+      return errorOdoo(403, "odoo.exceptions.AccessError", `You do not have enough rights to access the field "${prohibido}" on ${modelo}.`);
     }
 
     const context = cuerpo.context as Record<string, unknown> | undefined;

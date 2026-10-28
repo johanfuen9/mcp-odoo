@@ -90,3 +90,15 @@ export function registrarHerramienta<Forma extends z.ZodRawShape>(
     }) as never,
   );
 }
+
+export const esquemaNivel = z
+  .enum(["clase", "grupo", "cuenta", "subcuenta", "auxiliar"])
+  .describe(
+    "Nivel del PUC: clase (1 dígito), grupo (2), cuenta (4), subcuenta (6) o auxiliar (la cuenta completa de Odoo).",
+  );
+
+/** Variación absoluta y porcentual entre dos valores. */
+export function variacion(actual: number, anterior: number): { variacion: number; variacion_pct: number | null } {
+  const v = actual - anterior;
+  return { variacion: Math.round(v * 100) / 100, variacion_pct: anterior === 0 ? null : Math.round((v / Math.abs(anterior)) * 10000) / 100 };
+}
