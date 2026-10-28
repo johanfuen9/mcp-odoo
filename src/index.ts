@@ -19,7 +19,8 @@ if (config.allowEnvFallback) {
 }
 
 const app = crearApp(config);
-const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
+// 0.0.0.0: el proxy de Coolify (Traefik) llega al contenedor por la red de Docker.
+const server = serve({ fetch: app.fetch, port: config.port, hostname: process.env.HOST ?? "0.0.0.0" }, (info) => {
   console.log(`mcp-odoo v${VERSION} escuchando en el puerto ${info.port}`);
 });
 

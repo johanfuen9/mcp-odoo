@@ -2,6 +2,7 @@
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { extraerBearer, resolverCredenciales } from "./auth.js";
 import type { Config } from "./config.js";
@@ -85,6 +86,22 @@ export function crearApp(config: Config, opciones: OpcionesApp = {}): Hono {
     await next();
     if (c.req.path !== "/health") {
       log({ evento: "http", metodo: c.req.method, ruta: c.req.path, estado: c.res.status, ms: Date.now() - inicio });
+    }
+  });
+
+  // Ninguna petición legítima (formulario, token o llamada MCP) pasa de 1 MB.
+  app.use(
+    "*",
+    bodyLimit({
+      maxSize: 1024 * 1024,
+      onError: (c) => c.json({ error: "cuerpo_demasiado_grande" }, 413),
+    }),
+  );
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    if (new URL(deps.baseUrl(c)).protocol === "https:") {
+      c.header("Strict-Transport-Security", "max-age=31536000");
     }
   });
 

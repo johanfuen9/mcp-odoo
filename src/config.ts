@@ -111,7 +111,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 }
 
 /** Errores de configuración que impiden arrancar de forma segura. */
-export function validarConfig(config: Config): string[] {
+export function validarConfig(config: Config, produccion = process.env.NODE_ENV === "production"): string[] {
   const errores: string[] = [];
   if (!config.tokenSecret || config.tokenSecret.length < 32) {
     errores.push("TOKEN_SECRET es obligatorio y debe tener al menos 32 caracteres (usa: openssl rand -hex 32).");
@@ -126,6 +126,14 @@ export function validarConfig(config: Config): string[] {
   }
   if (config.publicBaseUrl && !/^https?:\/\//.test(config.publicBaseUrl)) {
     errores.push("PUBLIC_BASE_URL debe empezar por https://.");
+  }
+  if (produccion) {
+    if (!config.publicBaseUrl?.startsWith("https://")) {
+      errores.push("En producción, PUBLIC_BASE_URL es obligatoria y debe ser https:// (por ejemplo https://mcp.midominio.com).");
+    }
+    if (config.devAllowPrivateEnvUrl) {
+      errores.push("DEV_ALLOW_PRIVATE_ENV_URL=true no se permite en producción.");
+    }
   }
   return errores;
 }
